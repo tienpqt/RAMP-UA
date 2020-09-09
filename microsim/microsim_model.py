@@ -47,8 +47,6 @@ import rpy2.robjects as ro  # For calling R scripts
 from yaml import load, dump, SafeLoader  # pyyaml library for reading the parameters.yml file
 from shutil import copyfile
 
-USE_QUANT_DATA = False  # Temorary flag to use UCL SIMs or Devon ones. Needs to become a command-line parameter
-#import QUANTRampAPI2 as qa
 
 #import pandas.rpy.common as com # throws error and doesn't seem to be used?
 
@@ -87,7 +85,8 @@ class Microsim:
                  output_every_iteration = False,
                  debug=False,
                  disable_disease_status=False,
-                 disease_params: Dict = {}
+                 disease_params: Dict = {},
+                 use_quant_data = False
                  ):
         """
         Microsim constructor. This reads all of the necessary data to run the microsimulation.
@@ -118,6 +117,8 @@ class Microsim:
             disease status. Only good for testing.
         :param disease_params: Optional parameters that are passed to the R code that estimates disease status
             (a dictionary, assumed to be empty)
+        :param use_quant_data: # Whether to use the national SIMs (True) or the Devon-specifc ones (false).
+            Default false.
         """
 
         # Administrative variables that need to be defined
@@ -141,6 +142,10 @@ class Microsim:
         Microsim.testing = testing
         if self.testing:
             warnings.warn("Running in testing mode. Some exceptions will be disabled.")
+        self.use_quant_data = use_quant_data
+        Microsim.use_quant_data = use_quant_data  # Also need a class-level reference to this
+        if self.use_quant_data:  # Import the interface to access the national SIMs
+           import QUANTRampAPI2 as qa
 
         if not read_data:  # Optionally can not do this, usually for debugging
             return
@@ -677,7 +682,7 @@ class Microsim:
         
         
         # devon data
-        if not USE_QUANT_DATA:
+        if not cls.use_quant_data:
             # TODO Need to read full school flows, not just those of Devon
             print("Reading school flow data for Devon...", )
             dir = os.path.join(cls.DATA_DIR, "devon-schools")
@@ -861,7 +866,7 @@ class Microsim:
         """
         
         # Devon data
-        if not USE_QUANT_DATA:
+        if not cls.use_quant_data:
             # TODO Need to read full retail flows, not just those of Devon (temporarily created by Mark).
             # Will also need to subset the flows into areas of interst, but at the moment assume that we area already
             # working with Devon subset of flows
@@ -1661,9 +1666,11 @@ class Microsim:
 @click.option('-l', '--lockdown-file', default="google_mobility_lockdown_daily.csv",
               help="Optionally read lockdown mobility data from a file (default use google mobility). To have no "
                    "lockdown pass an empty string, i.e. --lockdown-file='' ")
+@click.option('-q', '--use-quant-data', default=False,
+              help="Whether to use the national SIMs (True) or the Devon-specifc ones (false, default).")
 
 def run_script(parameters_file, no_parameters_file, iterations, data_dir, output, output_every_iteration, debug,
-               repetitions, lockdown_file, scenario):
+               repetitions, lockdown_file, scenario, use_quant_data):
 
     # First see if we're reading a parameters file or using command-line arguments.
     if no_parameters_file:
@@ -1687,6 +1694,7 @@ def run_script(parameters_file, no_parameters_file, iterations, data_dir, output
             debug = sim_params["debug"]
             repetitions = sim_params["repetitions"]
             lockdown_file = sim_params["lockdown-file"]
+            use_quant_data = sim_params["use-quant-data"]
 
     # Check the parameters are sensible
     if iterations < 0:
@@ -1707,6 +1715,7 @@ def run_script(parameters_file, no_parameters_file, iterations, data_dir, output
           f"\tDebug mode?: {debug}\n"
           f"\tNumber of repetitions: {repetitions}\n"
           f"\tLockdown file: {lockdown_file}\n"
+          f"\tUse QUANT data? {use_quant_data}\n"
           f"\tCalibration parameters: {'N/A (not reading parameters file)' if no_parameters_file else str(calibration_params)}\n")
 
     if iterations == 0:
@@ -1726,7 +1735,7 @@ def run_script(parameters_file, no_parameters_file, iterations, data_dir, output
     # Use same arguments whether running 1 repetition or many
     msim_args = {"data_dir": data_dir, "scen_dir": scenario, "r_script_dir": r_script_dir,
                  "output": output, "output_every_iteration": output_every_iteration, "debug": debug,
-                 "lockdown_file": lockdown_file,
+                 "lockdown_file": lockdown_file, "use_quant_data": use_quant_data
                  }
 
     if not no_parameters_file:  # When using a parameters file, include the calibration parameters
@@ -1745,7 +1754,7 @@ def run_script(parameters_file, no_parameters_file, iterations, data_dir, output
     if repetitions == 1:
         # Create a microsim object
         m = Microsim(**msim_args)
-        copyfile(parameters_file,os.path.join(m.SCEN_DIR,"parameters.yml"))
+        copyfile(parameters_file,os.path.join(m.SCEN_DIR, "parameters.yml"))
         m.run(iterations,0)
         
     else:  # Run it multiple times in lots of cores
