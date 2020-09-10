@@ -685,3 +685,30 @@ def test__normalise():
     assert Microsim._normalise([40, 60]) == [0.4, 0.6]
     assert Microsim._normalise([6, 6, 6, 6, 6]) == [0.2, 0.2, 0.2, 0.2, 0.2]
 
+def test_find_new_directory():
+    """
+    A unit test for the _find_new_directory() function
+    """
+
+    data_dir = os.path.join(test_dir,'dummy_data','output')
+
+    scenario_dir = 'test_output'
+
+    Microsim._find_new_directory(data_dir, scenario_dir)
+
+    assert os.path.isdir(os.path.join(data_dir, scenario_dir))
+
+    # test if function creates a new directory with _1 suffix if directory exists
+    Microsim._find_new_directory(data_dir, "test_dir")
+
+    assert os.path.isdir(os.path.join(data_dir, "test_dir_1"))
+
+def test_find_new_directory_fails():
+    """
+    A unit test to check _find_new_directory() function fails 
+    """
+
+    data_dir = os.path.join(test_dir,'dummy_data','output')
+
+    with pytest.raises(FileExistsError):
+        Microsim._find_new_directory(data_dir, "existing_dir")

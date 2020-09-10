@@ -1,4 +1,7 @@
-*
+
 */
 !.gitignore
 !README.md
+!test_dir
+!existing_dir
+!existing_dir_1
